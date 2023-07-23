@@ -10,13 +10,12 @@ from Pdata import utils as du
 from biotite.sequence.io import fasta
 import esm
 import pandas as pd
+from tqdm import tqdm
 
 device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
 
-def run_folding(sequence, save_path):
+def run_folding(_folding_model, sequence, save_path):
     """Run ESMFold on sequence."""
-    _folding_model = esm.pretrained.esmfold_v1().eval()
-    _folding_model = _folding_model.to(device)
     with torch.no_grad():
         output = _folding_model.infer_pdb(sequence)
 
@@ -26,6 +25,7 @@ def run_folding(sequence, save_path):
 
 
 def run_self_consistency(
+        _folding_model, 
         decoy_pdb_dir: str,
         reference_pdb_path: str, 
         _pmpnn_dir = 'ProteinMPNN', 
@@ -93,6 +93,7 @@ def run_self_consistency(
         'seqs',
         os.path.basename(reference_pdb_path).replace('.pdb', '.fa')
     )
+    print('#### Finish ProteinMPNN Generation. Start ESMFold Generation.####')
     # assert False
     # Run ESMFold on each ProteinMPNN sequence and calculate metrics.
     mpnn_results = {
@@ -106,11 +107,11 @@ def run_self_consistency(
     os.makedirs(esmf_dir, exist_ok=True)
     fasta_seqs = fasta.FastaFile.read(mpnn_fasta_path)
     sample_feats = du.parse_pdb_feats('sample', reference_pdb_path)
-    for i, (header, string) in enumerate(fasta_seqs.items()):
+    for i, (header, string) in tqdm(enumerate(fasta_seqs.items())):
 
         # Run ESMFold
         esmf_sample_path = os.path.join(esmf_dir, f'sample_{i}.pdb')
-        _ = run_folding(string, esmf_sample_path)
+        _ = run_folding(_folding_model, string, esmf_sample_path)
         esmf_feats = du.parse_pdb_feats('folded_sample', esmf_sample_path)
         sample_seq = du.aatype_to_seq(sample_feats['aatype'])
 
@@ -135,16 +136,24 @@ def run_self_consistency(
 def main():
     pdbs_path = '../runs/genie-base/version_0/samples/epoch_49999_pdb'
     sc_output_dir = os.path.join(pdbs_path, '../self_consistency')
+    
+    # load esmfold
+    print('#### loading esmfold ####')
+    _folding_model = esm.pretrained.esmfold_v1().eval()
+    _folding_model = _folding_model.to(device)
+
     os.makedirs(sc_output_dir, exist_ok=True)
     import shutil
     for pdb in os.listdir(pdbs_path):
+        print(f'#### Evaluating {pdb} ####')
         pdb_path = os.path.join(pdbs_path, pdb)
         sc_output_dir_per = os.path.join(sc_output_dir, pdb[:-4])
         os.makedirs(sc_output_dir_per, exist_ok=True)
 
         shutil.copy(pdb_path, os.path.join(
                 sc_output_dir_per, os.path.basename(pdb_path)))
-        run_self_consistency(sc_output_dir_per, pdb_path)
+        run_self_consistency(_folding_model, sc_output_dir_per, pdb_path)
+        
 
 if __name__ == '__main__':
     main()
