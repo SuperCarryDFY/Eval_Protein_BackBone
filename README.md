@@ -26,14 +26,14 @@ python translate_to_pdb.py
 
 Make sure you have set the correct configures before run the code. 
 
-### Run translate_to_pdb.py
+### Run self_consistency.py
 
 This code contains run ProteinMPNN and ESMFold to evaluate the generated backbone. There are one path in self_consistency.py that should be set. 
 
 - pdbs_path: the path you store the *pdb. If you have run the translate_to_pdb.py, you can set it to be`../rootdir/model_name/version/samples/epoch_pdb`.
 
 ```shell
-python translate_to_pdb.py
+python self_consistency.py
 ```
 
 Then we can found result in `sc_result.csv`.
